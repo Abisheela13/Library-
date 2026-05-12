@@ -280,6 +280,34 @@ app.get("/history/all", auth, async (req, res) => {
   res.json(data);
 });
 
+async function createAdmin(){
+
+ const admin = await prisma.user.findUnique({
+  where:{
+   email:"abi@gmail.com"
+  }
+ });
+
+ if(!admin){
+
+  const hash = await bcrypt.hash("123456",10);
+
+  await prisma.user.create({
+   data:{
+    name:"Admin",
+    email:"abi@gmail.com",
+    password:hash,
+    role:"ADMIN"
+   }
+  });
+
+  console.log("Default Admin Created");
+ }
+}
+
+createAdmin();
+
+
 
 app.get("/", (req, res) => {
   res.send("Library Backend Running");
