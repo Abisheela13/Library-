@@ -3,12 +3,14 @@ import api from "../services/api";
 
 function User(){
 
- const [books,setBooks]=useState([]);
- const [history,setHistory]=useState([]);
+ const [books,setBooks] = useState([]);
+ const [history,setHistory] = useState([]);
 
  const token = localStorage.getItem("token");
 
- const user = JSON.parse(localStorage.getItem("user"));
+ const user = JSON.parse(
+  localStorage.getItem("user")
+ );
 
  const headers = {
   headers:{
@@ -18,32 +20,102 @@ function User(){
 
  const load = async()=>{
 
-  const b = await api.get("/books",headers);
+  try{
 
-  const h = await api.get("/history",headers);
+   const b = await api.get(
+    "/books",
+    headers
+   );
 
-  setBooks(b.data);
+   const h = await api.get(
+    "/history",
+    headers
+   );
 
-  setHistory(h.data);
+   setBooks(b.data);
+
+   setHistory(h.data);
+
+  }catch(err){
+
+   console.log(err);
+
+   alert("Failed To Load Data");
+  }
  }
 
  useEffect(()=>{
   load();
- },[])
+ },[]);
+
+
+ // ================= BORROW =================
 
  const borrowBook = async(id)=>{
 
-  await api.post(`/borrow/${id}`,{},headers);
+  try{
 
-  load();
+   const borrowedBooks = history.filter(
+    h =>
+    h.status==="BORROWED" ||
+    h.status==="RETURN_REQUESTED"
+   );
+
+   if(borrowedBooks.length >= 2){
+
+    return alert(
+     "Borrow Limit Reached"
+    );
+   }
+
+   await api.post(
+    `/borrow/${id}`,
+    {},
+    headers
+   );
+
+   alert("Book Borrowed");
+
+   load();
+
+  }catch(err){
+
+   console.log(err);
+
+   alert(
+    err.response?.data?.msg ||
+    "Borrow Failed"
+   );
+  }
  }
+
+
+ // ================= RETURN =================
 
  const requestReturn = async(id)=>{
 
-  await api.post(`/return/${id}`,{},headers);
+  try{
 
-  load();
+   await api.post(
+    `/return/${id}`,
+    {},
+    headers
+   );
+
+   alert("Return Requested");
+
+   load();
+
+  }catch(err){
+
+   console.log(err);
+
+   alert("Return Failed");
+  }
  }
+
+
+ // ================= LOGOUT =================
 
  const logout = ()=>{
 
@@ -56,11 +128,13 @@ function User(){
   window.location.href="/";
  }
 
+
  return(
 
   <div className="container-fluid">
 
    <div className="row min-vh-100">
+
 
     {/* SIDEBAR */}
 
@@ -73,7 +147,7 @@ function User(){
      <div className="card p-3 text-dark mb-3">
 
       <h5>
-       {user?.name}
+       {user?.name || "User"}
       </h5>
 
       <p className="mb-1">
@@ -119,7 +193,8 @@ function User(){
 
     </div>
 
-    {/* MAIN CONTENT */}
+
+    {/* MAIN */}
 
     <div className="col-md-9 p-4">
 
@@ -172,6 +247,9 @@ function User(){
 
      </div>
 
+
+     {/* HISTORY */}
+
      <div className="card p-3 shadow mt-4">
 
       <h3 className="mb-3">
@@ -201,27 +279,37 @@ function User(){
         <p className="mb-1">
          Borrow Date :
          {" "}
-         {new Date(h.borrowDate).toLocaleDateString()}
+         {
+          new Date(
+           h.createdAt
+          ).toLocaleDateString()
+         }
         </p>
 
-        <p className="mb-2">
-         Total Days :
-         {" "}
-         {h.days || 0}
-        </p>
-
-        {
-         h.status==="BORROWED" && (
-
-          <button
-          className="btn btn-warning"
-          onClick={()=>requestReturn(h.id)}
-          >
-           Request Return
-          </button>
-
-         )
+        <button
+        className={
+         h.status==="RETURNED"
+         ? "btn btn-success"
+         : h.status==="RETURN_REQUESTED"
+         ? "btn btn-warning"
+         : "btn btn-dark"
         }
+        disabled={
+         h.status!=="BORROWED"
+        }
+        onClick={()=>
+        requestReturn(h.id)}
+        >
+
+         {
+          h.status==="BORROWED"
+          ? "Request Return"
+          : h.status==="RETURN_REQUESTED"
+          ? "Pending Approval"
+          : "Returned"
+         }
+
+        </button>
 
        </div>
 

@@ -148,9 +148,20 @@ app.post("/api/login", async (req, res) => {
 
 app.get("/api/books", auth, async (req, res) => {
 
-  const books = await prisma.book.findMany();
+  try {
 
-  res.json(books);
+    const books = await prisma.book.findMany();
+
+    res.json(books);
+
+  } catch (err) {
+
+    console.log(err);
+
+    res.status(500).json({
+      msg: "Failed To Load Books"
+    });
+  }
 });
 
 
@@ -158,22 +169,33 @@ app.get("/api/books", auth, async (req, res) => {
 
 app.post("/api/books", auth, async (req, res) => {
 
-  if (req.user.role !== "ADMIN") {
-    return res.status(403).json({
-      msg: "Admin only"
+  try {
+
+    if (req.user.role !== "ADMIN") {
+      return res.status(403).json({
+        msg: "Admin only"
+      });
+    }
+
+    const book = await prisma.book.create({
+      data: {
+        title: req.body.title,
+        author: req.body.author,
+        stock: Number(req.body.stock),
+        quality: req.body.quality
+      }
+    });
+
+    res.json(book);
+
+  } catch (err) {
+
+    console.log(err);
+
+    res.status(500).json({
+      msg: "Add Book Failed"
     });
   }
-
-  const book = await prisma.book.create({
-    data: {
-      title: req.body.title,
-      author: req.body.author,
-      stock: Number(req.body.stock),
-      description: req.body.description
-    }
-  });
-
-  res.json(book);
 });
 
 
@@ -181,25 +203,36 @@ app.post("/api/books", auth, async (req, res) => {
 
 app.put("/api/books/:id", auth, async (req, res) => {
 
-  if (req.user.role !== "ADMIN") {
-    return res.status(403).json({
-      msg: "Admin only"
+  try {
+
+    if (req.user.role !== "ADMIN") {
+      return res.status(403).json({
+        msg: "Admin only"
+      });
+    }
+
+    const book = await prisma.book.update({
+      where: {
+        id: Number(req.params.id)
+      },
+      data: {
+        title: req.body.title,
+        author: req.body.author,
+        stock: Number(req.body.stock),
+        quality: req.body.quality
+      }
+    });
+
+    res.json(book);
+
+  } catch (err) {
+
+    console.log(err);
+
+    res.status(500).json({
+      msg: "Update Failed"
     });
   }
-
-  const book = await prisma.book.update({
-    where: {
-      id: Number(req.params.id)
-    },
-    data: {
-      title: req.body.title,
-      author: req.body.author,
-      stock: Number(req.body.stock),
-      description: req.body.description
-    }
-  });
-
-  res.json(book);
 });
 
 
@@ -207,21 +240,32 @@ app.put("/api/books/:id", auth, async (req, res) => {
 
 app.delete("/api/books/:id", auth, async (req, res) => {
 
-  if (req.user.role !== "ADMIN") {
-    return res.status(403).json({
-      msg: "Admin only"
+  try {
+
+    if (req.user.role !== "ADMIN") {
+      return res.status(403).json({
+        msg: "Admin only"
+      });
+    }
+
+    await prisma.book.delete({
+      where: {
+        id: Number(req.params.id)
+      }
+    });
+
+    res.json({
+      msg: "Book Deleted"
+    });
+
+  } catch (err) {
+
+    console.log(err);
+
+    res.status(500).json({
+      msg: "Delete Failed"
     });
   }
-
-  await prisma.book.delete({
-    where: {
-      id: Number(req.params.id)
-    }
-  });
-
-  res.json({
-    msg: "Book Deleted"
-  });
 });
 
 
@@ -231,44 +275,55 @@ app.delete("/api/books/:id", auth, async (req, res) => {
 
 app.post("/api/borrow/:id", auth, async (req, res) => {
 
-  const book = await prisma.book.findUnique({
-    where: {
-      id: Number(req.params.id)
-    }
-  });
+  try {
 
-  if (!book) {
-    return res.status(404).json({
-      msg: "Book not found"
+    const book = await prisma.book.findUnique({
+      where: {
+        id: Number(req.params.id)
+      }
+    });
+
+    if (!book) {
+      return res.status(404).json({
+        msg: "Book not found"
+      });
+    }
+
+    if (book.stock <= 0) {
+      return res.status(400).json({
+        msg: "Out Of Stock"
+      });
+    }
+
+    await prisma.borrow.create({
+      data: {
+        userId: req.user.id,
+        bookId: book.id,
+        status: "BORROWED"
+      }
+    });
+
+    await prisma.book.update({
+      where: {
+        id: book.id
+      },
+      data: {
+        stock: book.stock - 1
+      }
+    });
+
+    res.json({
+      msg: "Book Borrowed"
+    });
+
+  } catch (err) {
+
+    console.log(err);
+
+    res.status(500).json({
+      msg: "Borrow Failed"
     });
   }
-
-  if (book.stock <= 0) {
-    return res.status(400).json({
-      msg: "Out Of Stock"
-    });
-  }
-
-  await prisma.borrow.create({
-    data: {
-      userId: req.user.id,
-      bookId: book.id,
-      status: "BORROWED"
-    }
-  });
-
-  await prisma.book.update({
-    where: {
-      id: book.id
-    },
-    data: {
-      stock: book.stock - 1
-    }
-  });
-
-  res.json({
-    msg: "Book Borrowed"
-  });
 });
 
 
@@ -276,18 +331,29 @@ app.post("/api/borrow/:id", auth, async (req, res) => {
 
 app.post("/api/return/:id", auth, async (req, res) => {
 
-  await prisma.borrow.update({
-    where: {
-      id: Number(req.params.id)
-    },
-    data: {
-      status: "RETURN_REQUESTED"
-    }
-  });
+  try {
 
-  res.json({
-    msg: "Return Requested"
-  });
+    await prisma.borrow.update({
+      where: {
+        id: Number(req.params.id)
+      },
+      data: {
+        status: "RETURN_REQUESTED"
+      }
+    });
+
+    res.json({
+      msg: "Return Requested"
+    });
+
+  } catch (err) {
+
+    console.log(err);
+
+    res.status(500).json({
+      msg: "Return Failed"
+    });
+  }
 });
 
 
@@ -295,36 +361,47 @@ app.post("/api/return/:id", auth, async (req, res) => {
 
 app.post("/api/approve/:id", auth, async (req, res) => {
 
-  if (req.user.role !== "ADMIN") {
-    return res.status(403).json({
-      msg: "Admin only"
+  try {
+
+    if (req.user.role !== "ADMIN") {
+      return res.status(403).json({
+        msg: "Admin only"
+      });
+    }
+
+    const borrow = await prisma.borrow.update({
+      where: {
+        id: Number(req.params.id)
+      },
+      data: {
+        status: "RETURNED"
+      },
+      include: {
+        book: true
+      }
+    });
+
+    await prisma.book.update({
+      where: {
+        id: borrow.bookId
+      },
+      data: {
+        stock: borrow.book.stock + 1
+      }
+    });
+
+    res.json({
+      msg: "Return Approved"
+    });
+
+  } catch (err) {
+
+    console.log(err);
+
+    res.status(500).json({
+      msg: "Approve Failed"
     });
   }
-
-  const borrow = await prisma.borrow.update({
-    where: {
-      id: Number(req.params.id)
-    },
-    data: {
-      status: "RETURNED"
-    },
-    include: {
-      book: true
-    }
-  });
-
-  await prisma.book.update({
-    where: {
-      id: borrow.bookId
-    },
-    data: {
-      stock: borrow.book.stock + 1
-    }
-  });
-
-  res.json({
-    msg: "Return Approved"
-  });
 });
 
 
@@ -334,16 +411,27 @@ app.post("/api/approve/:id", auth, async (req, res) => {
 
 app.get("/api/history", auth, async (req, res) => {
 
-  const data = await prisma.borrow.findMany({
-    where: {
-      userId: req.user.id
-    },
-    include: {
-      book: true
-    }
-  });
+  try {
 
-  res.json(data);
+    const data = await prisma.borrow.findMany({
+      where: {
+        userId: req.user.id
+      },
+      include: {
+        book: true
+      }
+    });
+
+    res.json(data);
+
+  } catch (err) {
+
+    console.log(err);
+
+    res.status(500).json({
+      msg: "History Failed"
+    });
+  }
 });
 
 
@@ -351,20 +439,31 @@ app.get("/api/history", auth, async (req, res) => {
 
 app.get("/api/history/all", auth, async (req, res) => {
 
-  if (req.user.role !== "ADMIN") {
-    return res.status(403).json({
-      msg: "Admin only"
+  try {
+
+    if (req.user.role !== "ADMIN") {
+      return res.status(403).json({
+        msg: "Admin only"
+      });
+    }
+
+    const data = await prisma.borrow.findMany({
+      include: {
+        user: true,
+        book: true
+      }
+    });
+
+    res.json(data);
+
+  } catch (err) {
+
+    console.log(err);
+
+    res.status(500).json({
+      msg: "History Failed"
     });
   }
-
-  const data = await prisma.borrow.findMany({
-    include: {
-      user: true,
-      book: true
-    }
-  });
-
-  res.json(data);
 });
 
 

@@ -13,33 +13,43 @@ function Login(){
 
  const login = async()=>{
 
-  try{
+ try{
 
-   const res = await api.post("/login",data);
+  const res = await api.post("/login",data);
 
-   localStorage.setItem("token",res.data.token);
+  localStorage.setItem(
+   "token",
+   res.data.token
+  );
 
-   localStorage.setItem("role",res.data.user.role);
+  localStorage.setItem(
+   "role",
+   res.data.user.role
+  );
 
-   if(res.data.user.role==="ADMIN"){
+  localStorage.setItem(
+   "user",
+   JSON.stringify(res.data.user)
+  );
 
-    nav("/admin");
+  if(res.data.user.role==="ADMIN"){
 
-   }else{
+   nav("/admin");
 
-    nav("/user");
-   }
+  }else{
 
-  }catch(err){
-
-   console.log(err);
-
-   alert(
-    err.response?.data?.msg || "Login Failed"
-   );
+   nav("/user");
   }
- }
 
+ }catch(err){
+
+  console.log(err);
+
+  alert(
+   err.response?.data?.msg || "Login Failed"
+  );
+ }
+}
  return(
 
   <div className="container py-5">
