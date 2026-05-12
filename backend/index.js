@@ -280,6 +280,11 @@ app.get("/history/all", auth, async (req, res) => {
   res.json(data);
 });
 
+
+app.get("/", (req, res) => {
+  res.send("Library Backend Running");
+});
+
 app.listen(5000, () => {
   console.log("Server Running");
 });
