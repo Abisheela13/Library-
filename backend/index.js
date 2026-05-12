@@ -46,7 +46,7 @@ function auth(req, res, next) {
 
 // ================= REGISTER =================
 
-app.post("/register", async (req, res) => {
+app.post("/api/register", async (req, res) => {
 
   try {
 
@@ -88,7 +88,7 @@ app.post("/register", async (req, res) => {
 
 // ================= LOGIN =================
 
-app.post("/login", async (req, res) => {
+app.post("/api/login", async (req, res) => {
 
   try {
 
@@ -108,8 +108,6 @@ app.post("/login", async (req, res) => {
       password,
       user.password
     );
-
-    console.log(valid);
 
     if (!valid) {
       return res.status(400).json({
@@ -141,6 +139,232 @@ app.post("/login", async (req, res) => {
       msg: "Server Error"
     });
   }
+});
+
+
+// ================= BOOKS =================
+
+// GET ALL BOOKS
+
+app.get("/api/books", auth, async (req, res) => {
+
+  const books = await prisma.book.findMany();
+
+  res.json(books);
+});
+
+
+// ADD BOOK
+
+app.post("/api/books", auth, async (req, res) => {
+
+  if (req.user.role !== "ADMIN") {
+    return res.status(403).json({
+      msg: "Admin only"
+    });
+  }
+
+  const book = await prisma.book.create({
+    data: {
+      title: req.body.title,
+      author: req.body.author,
+      stock: Number(req.body.stock),
+      description: req.body.description
+    }
+  });
+
+  res.json(book);
+});
+
+
+// EDIT BOOK
+
+app.put("/api/books/:id", auth, async (req, res) => {
+
+  if (req.user.role !== "ADMIN") {
+    return res.status(403).json({
+      msg: "Admin only"
+    });
+  }
+
+  const book = await prisma.book.update({
+    where: {
+      id: Number(req.params.id)
+    },
+    data: {
+      title: req.body.title,
+      author: req.body.author,
+      stock: Number(req.body.stock),
+      description: req.body.description
+    }
+  });
+
+  res.json(book);
+});
+
+
+// DELETE BOOK
+
+app.delete("/api/books/:id", auth, async (req, res) => {
+
+  if (req.user.role !== "ADMIN") {
+    return res.status(403).json({
+      msg: "Admin only"
+    });
+  }
+
+  await prisma.book.delete({
+    where: {
+      id: Number(req.params.id)
+    }
+  });
+
+  res.json({
+    msg: "Book Deleted"
+  });
+});
+
+
+// ================= BORROW =================
+
+// BORROW BOOK
+
+app.post("/api/borrow/:id", auth, async (req, res) => {
+
+  const book = await prisma.book.findUnique({
+    where: {
+      id: Number(req.params.id)
+    }
+  });
+
+  if (!book) {
+    return res.status(404).json({
+      msg: "Book not found"
+    });
+  }
+
+  if (book.stock <= 0) {
+    return res.status(400).json({
+      msg: "Out Of Stock"
+    });
+  }
+
+  await prisma.borrow.create({
+    data: {
+      userId: req.user.id,
+      bookId: book.id,
+      status: "BORROWED"
+    }
+  });
+
+  await prisma.book.update({
+    where: {
+      id: book.id
+    },
+    data: {
+      stock: book.stock - 1
+    }
+  });
+
+  res.json({
+    msg: "Book Borrowed"
+  });
+});
+
+
+// RETURN REQUEST
+
+app.post("/api/return/:id", auth, async (req, res) => {
+
+  await prisma.borrow.update({
+    where: {
+      id: Number(req.params.id)
+    },
+    data: {
+      status: "RETURN_REQUESTED"
+    }
+  });
+
+  res.json({
+    msg: "Return Requested"
+  });
+});
+
+
+// APPROVE RETURN
+
+app.post("/api/approve/:id", auth, async (req, res) => {
+
+  if (req.user.role !== "ADMIN") {
+    return res.status(403).json({
+      msg: "Admin only"
+    });
+  }
+
+  const borrow = await prisma.borrow.update({
+    where: {
+      id: Number(req.params.id)
+    },
+    data: {
+      status: "RETURNED"
+    },
+    include: {
+      book: true
+    }
+  });
+
+  await prisma.book.update({
+    where: {
+      id: borrow.bookId
+    },
+    data: {
+      stock: borrow.book.stock + 1
+    }
+  });
+
+  res.json({
+    msg: "Return Approved"
+  });
+});
+
+
+// ================= HISTORY =================
+
+// USER HISTORY
+
+app.get("/api/history", auth, async (req, res) => {
+
+  const data = await prisma.borrow.findMany({
+    where: {
+      userId: req.user.id
+    },
+    include: {
+      book: true
+    }
+  });
+
+  res.json(data);
+});
+
+
+// ADMIN HISTORY
+
+app.get("/api/history/all", auth, async (req, res) => {
+
+  if (req.user.role !== "ADMIN") {
+    return res.status(403).json({
+      msg: "Admin only"
+    });
+  }
+
+  const data = await prisma.borrow.findMany({
+    include: {
+      user: true,
+      book: true
+    }
+  });
+
+  res.json(data);
 });
 
 
@@ -177,11 +401,17 @@ async function createAdmin() {
 
   } catch (err) {
 
-    console.log("Admin Create Error");
-
     console.log(err);
   }
 }
+
+
+// ================= ROOT =================
+
+app.get("/", (req, res) => {
+  res.send("Library Backend Running");
+});
+
 
 // ================= START SERVER =================
 
@@ -192,17 +422,8 @@ async function startServer() {
   const PORT = process.env.PORT || 5000;
 
   app.listen(PORT, () => {
-
     console.log(`Server Running on ${PORT}`);
-
   });
 }
 
 startServer();
-
-
-// ================= ROOT =================
-
-app.get("/", (req, res) => {
-  res.send("Library Backend Running");
-});
